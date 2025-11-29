@@ -12,7 +12,14 @@ export default function Contacts() {
     ;(async () => {
       if (!c) return
       const r = await fetch(`/api/contacts/${c}`)
-      if (r.ok) setList(await r.json())
+      if (r.ok) {
+        const base = await r.json()
+        const withProfiles = await Promise.all(base.map(async entry => {
+          try { const pr = await fetch(`/api/profile/${entry.code}`); if (pr.ok) { const p = await pr.json(); return { ...entry, avatarB64: p.avatarB64 || '', status: p.status || 'available' } } } catch {}
+          return { ...entry, avatarB64: '', status: 'offline' }
+        }))
+        setList(withProfiles)
+      }
     })()
   }, [])
 
@@ -34,8 +41,12 @@ export default function Contacts() {
         </div>
         <div style={{ marginTop: 16 }}>
           {list.map(c => (
-            <div key={c.code} style={{ background: '#102030', padding: 12, borderRadius: 8, marginBottom: 8 }}>
-              <div style={{ color: '#fff' }}>{c.alias || c.code}</div>
+            <div key={c.code} style={{ display: 'flex', alignItems: 'center', background: '#102030', padding: 12, borderRadius: 8, marginBottom: 8 }}>
+              <img src={c.avatarB64 ? `data:image/png;base64,${c.avatarB64}` : '/icons/icon-192x192.png'} alt="avatar" width="40" height="40" style={{ borderRadius: 20, marginRight: 12 }} />
+              <div style={{ flex: 1 }}>
+                <div style={{ color: '#fff' }}>{c.alias || c.code}</div>
+                <div style={{ color: '#aaa', fontSize: 12 }}>{c.status}</div>
+              </div>
               <a href={`/chat?peer=${encodeURIComponent(c.code)}`} style={{ color: '#C9A14A', textDecoration: 'underline' }}>Chat</a>
             </div>
           ))}

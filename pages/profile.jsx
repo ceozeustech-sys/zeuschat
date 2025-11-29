@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 
 export default function Profile() {
   const [code, setCode] = useState('')
-  const [profile, setProfile] = useState({ name: '', phone: '', avatarB64: '' })
+  const [profile, setProfile] = useState({ name: '', phone: '', avatarB64: '', status: 'available' })
   const [status, setStatus] = useState('')
 
   useEffect(() => {
@@ -38,6 +38,16 @@ export default function Profile() {
         <input value={profile.phone} onChange={e => setProfile({ ...profile, phone: e.target.value })} placeholder="Telephone" style={{ width: '100%', padding: 8, marginTop: 8 }} />
         <div style={{ marginTop: 8 }}>
           <input type="file" accept="image/*" onChange={onAvatar} />
+        </div>
+        <div style={{ marginTop: 8, color: '#fff' }}>
+          <label>Status</label>
+          <select value={profile.status || 'available'} onChange={e => setProfile({ ...profile, status: e.target.value })} style={{ marginLeft: 8, padding: 8 }}>
+            <option value="available">Available</option>
+            <option value="busy">Busy</option>
+            <option value="working">Working</option>
+            <option value="sleeping">Sleeping</option>
+            <option value="offline">Offline</option>
+          </select>
         </div>
         <button onClick={save} style={{ marginTop: 12, padding: '8px 16px', background: '#C9A14A', color: '#0E1A24', border: 'none', borderRadius: 6 }}>Save</button>
         <div style={{ marginTop: 12 }}><a href="/contacts" style={{ color: '#C9A14A', textDecoration: 'underline' }}>Manage Contacts</a></div>

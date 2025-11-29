@@ -11,6 +11,8 @@ export default function Chat() {
   const [msg, setMsg] = useState('')
   const [list, setList] = useState([])
   const [useServer, setUseServer] = useState(true)
+  const [password, setPassword] = useState('')
+  const [ttl, setTtl] = useState('30')
 
   useEffect(() => {
     const existing = getLS('device_id', '')
@@ -22,6 +24,9 @@ export default function Chat() {
     setPeerId(peer || '')
     const conv = getLS('conv', [])
     setList(conv)
+    try {
+      const qp = new URLSearchParams(window.location.search); const p = qp.get('peer'); if (p) { setPeerId(p); setLS('peer_id', p) }
+    } catch {}
   }, [])
 
   function genId() {
@@ -32,15 +37,18 @@ export default function Chat() {
 
   async function send() {
     if (!peerId || !msg) return
+    const ttlMs = Math.min(30000, Math.max(10000, parseInt(ttl || '30', 10) * 1000))
+    const passHashB64 = btoa(password || '')
     if (useServer) {
-      const r = await fetch('/api/send', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ device_id: peerId, data: msg, ttl_ms: 30000 }) })
+      const payload = { device_id: peerId, data: JSON.stringify({ text: msg, passHashB64 }), ttl_ms: ttlMs }
+      const r = await fetch('/api/send', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
       const j = await r.json()
-      const item = { id: j.id || genId(), from: myId, to: peerId, text: msg, ts: Date.now(), ttl: 30000 }
+      const item = { id: j.id || genId(), from: myId, to: peerId, text: msg, ts: Date.now(), ttl: ttlMs }
       const next = [item, ...list]
       setList(next); setLS('conv', next)
       setMsg('')
     } else {
-      const item = { id: genId(), from: myId, to: peerId, text: msg, ts: Date.now(), ttl: 30000 }
+      const item = { id: genId(), from: myId, to: peerId, text: msg, ts: Date.now(), ttl: ttlMs }
       const next = [item, ...list]
       setList(next); setLS('conv', next)
       setMsg('')
@@ -65,7 +73,15 @@ export default function Chat() {
           const b = await fetch(`/api/blob/${j.id}`)
           if (b.ok) {
             const p = await b.json()
-            const item = { id: j.id, from: peerId || 'peer', to: myId, text: p.data, ts: Date.now(), ttl: 30000 }
+            let text = ''
+            try { const o = JSON.parse(p.data); text = o.text; const ph = o.passHashB64 || '';
+              const entered = prompt('Enter message password to view:') || ''
+              if (btoa(entered) !== ph) {
+                await fetch(`/api/ack/${peerId}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ blobId: j.id, reason: 'wrong_password' }) })
+                return
+              }
+            } catch { text = String(p.data || '') }
+            const item = { id: j.id, from: peerId || 'peer', to: myId, text, ts: Date.now(), ttl: 30000 }
             setList(prev => { const next = [item, ...prev]; setLS('conv', next); return next })
           }
         }
@@ -82,7 +98,13 @@ export default function Chat() {
         <label style={{ color: '#fff' }}>Peer ID</label>
         <input value={peerId} onChange={e => savePeer(e.target.value)} placeholder="friend's device id" style={{ width: '100%', padding: 8 }} />
         <div style={{ marginTop: 12 }}>
-          <input value={msg} onChange={e => setMsg(e.target.value)} placeholder="type a message" style={{ width: '70%', padding: 8 }} />
+          <input value={msg} onChange={e => setMsg(e.target.value)} placeholder="type a message" style={{ width: '50%', padding: 8 }} />
+          <input value={password} onChange={e => setPassword(e.target.value)} placeholder="message password" type="password" style={{ width: '20%', padding: 8, marginLeft: 8 }} />
+          <select value={ttl} onChange={e => setTtl(e.target.value)} style={{ marginLeft: 8, padding: 8 }}>
+            <option value="10">10s</option>
+            <option value="20">20s</option>
+            <option value="30">30s</option>
+          </select>
           <button onClick={send} style={{ marginLeft: 8, padding: '8px 16px', background: '#C9A14A', color: '#0E1A24', border: 'none', borderRadius: 6 }}>Send (demo)</button>
         </div>
         <p style={{ color: '#fff', marginTop: 8 }}>Messages expire after viewing or 30s. Mode: {useServer ? 'Server' : 'Local'}</p>
