@@ -18,6 +18,12 @@ export default function Chat() {
   const [replies, setReplies] = useState({})
   const [relayOk, setRelayOk] = useState(false)
   const [showReq, setShowReq] = useState({ visible: false, sender: '', blobId: '' })
+  const [attachB64, setAttachB64] = useState('')
+  const [attachKind, setAttachKind] = useState('')
+  const [attachMime, setAttachMime] = useState('')
+  const [recording, setRecording] = useState(false)
+  const [recChunks, setRecChunks] = useState([])
+  const [recMime, setRecMime] = useState('')
 
   useEffect(() => {
     const existing = getLS('device_id', '')
@@ -48,19 +54,23 @@ export default function Chat() {
     if (!peerId || !msg) return
     const ttlMs = Math.min(30000, Math.max(10000, parseInt(ttl || '30', 10) * 1000))
     if (useServer) {
-      const payload = { device_id: peerId, data: JSON.stringify({ text: msg }), ttl_ms: ttlMs, from: myId }
+      let dataObj = { kind: 'text', text: msg }
+      if (attachB64 && attachKind) dataObj = { kind: attachKind, b64: attachB64, mime: attachMime }
+      const payload = { device_id: peerId, data: JSON.stringify(dataObj), ttl_ms: ttlMs, from: myId }
       const r = await fetch('/api/send', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
       const j = await r.json()
-      const item = { id: j.id || genId(), from: myId, to: peerId, text: msg, ts: Date.now(), ttl: ttlMs, status: 'sent' }
+      const item = { id: j.id || genId(), from: myId, to: peerId, text: msg, kind: dataObj.kind, b64: dataObj.b64 || '', mime: dataObj.mime || '', ts: Date.now(), ttl: ttlMs, status: 'sent' }
       const next = [item, ...list]
       setList(next); setLS('conv', next)
       setMsg('')
+      setAttachB64(''); setAttachKind(''); setAttachMime('')
     } else {
-      const item = { id: genId(), from: myId, to: peerId, text: msg, ts: Date.now(), ttl: ttlMs, status: 'sent' }
+      const item = { id: genId(), from: myId, to: peerId, text: msg, kind: attachKind || 'text', b64: attachB64 || '', mime: attachMime || '', ts: Date.now(), ttl: ttlMs, status: 'sent' }
       const next = [item, ...list]
       setList(next); setLS('conv', next)
       setMsg('')
       setTimeout(() => expire(item.id), item.ttl)
+      setAttachB64(''); setAttachKind(''); setAttachMime('')
     }
   }
 
@@ -98,8 +108,11 @@ export default function Chat() {
                 await fetch(`/api/ack/${sender2}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ blobId: j.id, reason: 'viewed' }) })
               }
             } catch { text = String(p.data || ''); }
-            const item = { id: j.id, from: (p.from || peerId || 'peer'), to: myId, text, ts: Date.now(), ttl: 30000 }
+            let kind = 'text', b64 = '', mime = ''
+            try { const o2 = JSON.parse(p.data); kind = o2.kind || 'text'; b64 = o2.b64 || ''; mime = o2.mime || ''; text = o2.text || text } catch {}
+            const item = { id: j.id, from: (p.from || peerId || 'peer'), to: myId, text, kind, b64, mime, ts: Date.now(), ttl: 30000 }
             setList(prev => { const next = [item, ...prev]; setLS('conv', next); return next })
+            setTimeout(() => expire(item.id), item.ttl)
           }
         }
       } catch {}
@@ -116,6 +129,39 @@ export default function Chat() {
     }, 2000)
     return () => clearInterval(t)
   }, [useServer, myId])
+
+  async function onAttachFile(e) {
+    const f = e.target.files && e.target.files[0]
+    if (!f) return
+    setAttachMime(f.type)
+    if (f.type.startsWith('image')) setAttachKind('image')
+    else if (f.type.startsWith('video')) setAttachKind('video')
+    else setAttachKind('file')
+    const r = new FileReader()
+    r.onload = () => setAttachB64(String(r.result).split(',')[1] || '')
+    r.readAsDataURL(f)
+  }
+
+  async function startRecord() {
+    if (recording) return
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      const mr = new MediaRecorder(stream)
+      setRecMime(mr.mimeType || 'audio/webm')
+      setRecChunks([])
+      mr.ondataavailable = e => setRecChunks(prev => [...prev, e.data])
+      mr.onstop = async () => {
+        const blob = new Blob(recChunks, { type: recMime || 'audio/webm' })
+        const fr = new FileReader()
+        fr.onload = () => { setAttachB64(String(fr.result).split(',')[1] || ''); setAttachKind('audio'); setAttachMime(recMime || 'audio/webm') }
+        fr.readAsDataURL(blob)
+        setRecording(false)
+      }
+      mr.start()
+      setRecording(true)
+      setTimeout(() => { try { mr.stop() } catch {} }, Math.min(30000, parseInt(ttl || '30', 10) * 1000))
+    } catch {}
+  }
 
   return (
     <main style={{ minHeight: '100vh', background: '#0E1A24', color: '#C9A14A' }}>
@@ -136,6 +182,22 @@ export default function Chat() {
           </select>
           <button onClick={send} style={{ marginLeft: 8, padding: '8px 16px', background: '#C9A14A', color: '#0E1A24', border: 'none', borderRadius: 6 }}>Send (demo)</button>
         </div>
+        <div style={{ marginTop: 8 }}>
+          <input type="file" accept="image/*,video/*" onChange={onAttachFile} />
+          <button onClick={startRecord} disabled={recording} style={{ marginLeft: 8, padding: '6px 12px', background: recording ? '#777' : '#C9A14A', color: '#0E1A24', border: 'none', borderRadius: 6 }}>Record voice ≤30s</button>
+        </div>
+        {attachB64 ? (
+          <div style={{ marginTop: 8 }}>
+            <div style={{ color: '#fff' }}>Attachment ready: {attachKind}</div>
+            {attachKind === 'image' ? (
+              <img src={`data:${attachMime};base64,${attachB64}`} alt="preview" style={{ maxWidth: '60%', borderRadius: 8 }} />
+            ) : attachKind === 'video' ? (
+              <video src={`data:${attachMime};base64,${attachB64}`} controls style={{ maxWidth: '60%', borderRadius: 8 }} />
+            ) : attachKind === 'audio' ? (
+              <audio src={`data:${attachMime};base64,${attachB64}`} controls />
+            ) : null}
+          </div>
+        ) : null}
         <p style={{ color: '#fff', marginTop: 8 }}>Messages expire after viewing or 30s. Mode: {useServer ? 'Server' : 'Local'}</p>
         <div style={{ marginTop: 8 }}>
           <label style={{ color: '#fff' }}><input type="checkbox" checked={useServer} onChange={e => setUseServer(e.target.checked)} /> Use server relay</label>
@@ -143,10 +205,19 @@ export default function Chat() {
         <div style={{ marginTop: 16 }}>
           {list.length === 0 ? <p style={{ color: '#fff' }}>No messages</p> : null}
           {list.map(item => (
-            <div key={item.id} style={{ background: '#102030', padding: 12, borderRadius: 8, marginBottom: 8 }}>
-              <div style={{ color: '#fff' }}><b>{item.from === myId ? 'You → ' : 'Peer → '}{item.to}</b></div>
-              <div style={{ color: '#fff' }}>{item.text}</div>
-              <div style={{ color: '#888', fontSize: 12 }}>ttl: {Math.floor((item.ttl - (Date.now() - item.ts)) / 1000)}s • {item.status === 'viewed' ? '✓✓' : item.status === 'delivered' ? '✓✓' : item.status === 'wrong_password' ? '✗' : '✓'}</div>
+            <div key={item.id} style={{ display: 'flex', justifyContent: item.from === myId ? 'flex-end' : 'flex-start', marginBottom: 8 }}>
+              <div style={{ maxWidth: '70%', background: item.from === myId ? '#1b2a40' : '#102030', padding: 12, borderRadius: 12 }}>
+                <div style={{ color: '#fff' }}><b>{item.from === myId ? 'You' : 'Peer'}</b></div>
+                {item.kind === 'image' ? (
+                  <img src={`data:${item.mime || 'image/png'};base64,${item.b64}`} alt="image" style={{ maxWidth: '100%', borderRadius: 8 }} />
+                ) : item.kind === 'video' ? (
+                  <video src={`data:${item.mime || 'video/mp4'};base64,${item.b64}`} controls style={{ width: '100%', borderRadius: 8 }} />
+                ) : item.kind === 'audio' ? (
+                  <audio src={`data:${item.mime || 'audio/webm'};base64,${item.b64}`} controls />
+                ) : (
+                  <div style={{ color: '#fff' }}>{item.text}</div>
+                )}
+                <div style={{ color: '#888', fontSize: 12 }}>ttl: {Math.floor((item.ttl - (Date.now() - item.ts)) / 1000)}s • {item.status === 'viewed' ? '✓✓' : item.status === 'delivered' ? '✓✓' : item.status === 'wrong_password' ? '✗' : '✓'}</div>
               <button onClick={() => view(item.id)} style={{ marginTop: 6, padding: '4px 8px', background: '#C9A14A', color: '#0E1A24', border: 'none', borderRadius: 6 }}>View (expire)</button>
               {item.from !== myId ? (
                 <div style={{ marginTop: 8 }}>
@@ -154,6 +225,7 @@ export default function Chat() {
                   <button onClick={() => sendReply(item.from, item.id)} style={{ marginLeft: 8, padding: '6px 12px', background: '#C9A14A', color: '#0E1A24', border: 'none', borderRadius: 6 }}>Reply</button>
                 </div>
               ) : null}
+              </div>
             </div>
           ))}
         </div>
