@@ -78,6 +78,8 @@ export default function Home() {
           <a href="/health" style={{ color: '#C9A14A', textDecoration: 'underline', marginRight: 12 }}>Status</a>
           <a href="/about" style={{ color: '#C9A14A', textDecoration: 'underline', marginRight: 12 }}>About</a>
           <a href="/chat" style={{ color: '#C9A14A', textDecoration: 'underline', marginRight: 12 }}>Demo Chat</a>
+          <a href="/register" style={{ color: '#C9A14A', textDecoration: 'underline', marginRight: 12 }}>Register</a>
+          <a href="/contacts" style={{ color: '#C9A14A', textDecoration: 'underline', marginRight: 12 }}>Contacts</a>
           <a href="mailto:hello@zeustechafrica.com" style={{ color: '#C9A14A', textDecoration: 'underline' }}>Contact</a>
         </div>
       </div>
