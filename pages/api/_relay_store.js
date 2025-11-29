@@ -1,6 +1,6 @@
 const inbox = new Map()
 const blobs = new Map()
-const users = new Map() // code -> { name, phone, passwordHashB64, avatarB64 }
+const users = new Map() // code -> { name, phone, passwordHashB64, avatarB64, status }
 const contacts = new Map() // ownerCode -> [{ code, alias }]
 const acks = new Map() // code -> { blobId, reason }
 const sms = new Map() // phone -> code
@@ -38,8 +38,12 @@ export function getOnce(id) {
   blobs.delete(id)
   return b.payload
 }
+export function peekBlob(id) {
+  const b = blobs.get(id)
+  return b ? b.payload : null
+}
 
-export function registerUser(code, profile) { users.set(code, profile); if (!contacts.has(code)) contacts.set(code, []) }
+export function registerUser(code, profile) { users.set(code, { status: 'available', ...profile }); if (!contacts.has(code)) contacts.set(code, []) }
 export function getUser(code) { return users.get(code) || null }
 export function setProfile(code, patch) { const u = users.get(code) || {}; const nu = { ...u, ...patch }; users.set(code, nu); return nu }
 export function addContact(owner, entry) { const list = contacts.get(owner) || []; const exists = list.find(c => c.code === entry.code); if (!exists) list.push(entry); contacts.set(owner, list); return list }

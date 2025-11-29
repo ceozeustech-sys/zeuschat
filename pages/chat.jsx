@@ -14,6 +14,7 @@ export default function Chat() {
   const [useServer, setUseServer] = useState(true)
   const [password, setPassword] = useState('')
   const [ttl, setTtl] = useState('30')
+  const [myPassHash, setMyPassHash] = useState('')
 
   useEffect(() => {
     const existing = getLS('device_id', '')
@@ -28,6 +29,9 @@ export default function Chat() {
     try {
       const qp = new URLSearchParams(window.location.search); const p = qp.get('peer'); if (p) { setPeerId(p); setLS('peer_id', p) }
     } catch {}
+    ;(async () => {
+      try { const r = await fetch(`/api/profile/${existing || getLS('device_id','')}`); if (r.ok) { const j = await r.json(); setMyPassHash(j.passwordHashB64 || '') } } catch {}
+    })()
   }, [])
 
   function genId() {
@@ -39,17 +43,16 @@ export default function Chat() {
   async function send() {
     if (!peerId || !msg) return
     const ttlMs = Math.min(30000, Math.max(10000, parseInt(ttl || '30', 10) * 1000))
-    const passHashB64 = btoa(password || '')
     if (useServer) {
-      const payload = { device_id: peerId, data: JSON.stringify({ text: msg, passHashB64 }), ttl_ms: ttlMs, from: myId }
+      const payload = { device_id: peerId, data: JSON.stringify({ text: msg }), ttl_ms: ttlMs, from: myId }
       const r = await fetch('/api/send', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
       const j = await r.json()
-      const item = { id: j.id || genId(), from: myId, to: peerId, text: msg, ts: Date.now(), ttl: ttlMs }
+      const item = { id: j.id || genId(), from: myId, to: peerId, text: msg, ts: Date.now(), ttl: ttlMs, status: 'sent' }
       const next = [item, ...list]
       setList(next); setLS('conv', next)
       setMsg('')
     } else {
-      const item = { id: genId(), from: myId, to: peerId, text: msg, ts: Date.now(), ttl: ttlMs }
+      const item = { id: genId(), from: myId, to: peerId, text: msg, ts: Date.now(), ttl: ttlMs, status: 'sent' }
       const next = [item, ...list]
       setList(next); setLS('conv', next)
       setMsg('')
@@ -75,11 +78,13 @@ export default function Chat() {
           if (b.ok) {
             const p = await b.json()
             let text = ''
-            try { const o = JSON.parse(p.data); text = o.text; const ph = o.passHashB64 || ''; const sender = p.from || 'peer';
-              const entered = prompt('Enter message password to view:') || ''
-              if (btoa(entered) !== ph) {
+            try { const o = JSON.parse(p.data); text = o.text; const sender = p.from || 'peer';
+              const entered = prompt('Enter your viewing password to open:') || ''
+              if (btoa(entered) !== myPassHash) {
                 await fetch(`/api/ack/${sender}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ blobId: j.id, reason: 'wrong_password' }) })
                 return
+              } else {
+                await fetch(`/api/ack/${sender}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ blobId: j.id, reason: 'viewed' }) })
               }
             } catch { text = String(p.data || ''); }
             const item = { id: j.id, from: (p.from || peerId || 'peer'), to: myId, text, ts: Date.now(), ttl: 30000 }
@@ -90,6 +95,16 @@ export default function Chat() {
     }, 2000)
     return () => clearInterval(t)
   }, [useServer, myId, peerId])
+
+  useEffect(() => {
+    const t = setInterval(async () => {
+      if (!useServer || !myId) return
+      try { const r = await fetch(`/api/ack/${myId}`); if (r.status === 204) return; const a = await r.json(); if (a && a.blobId) {
+        setList(prev => { const next = prev.map(m => m.id === a.blobId ? { ...m, status: a.reason } : m); setLS('conv', next); return next })
+      } } catch {}
+    }, 2000)
+    return () => clearInterval(t)
+  }, [useServer, myId])
 
   return (
     <main style={{ minHeight: '100vh', background: '#0E1A24', color: '#C9A14A' }}>
@@ -120,7 +135,7 @@ export default function Chat() {
             <div key={item.id} style={{ background: '#102030', padding: 12, borderRadius: 8, marginBottom: 8 }}>
               <div style={{ color: '#fff' }}><b>{item.from === myId ? 'You → ' : 'Peer → '}{item.to}</b></div>
               <div style={{ color: '#fff' }}>{item.text}</div>
-              <div style={{ color: '#888', fontSize: 12 }}>ttl: {Math.floor((item.ttl - (Date.now() - item.ts)) / 1000)}s</div>
+              <div style={{ color: '#888', fontSize: 12 }}>ttl: {Math.floor((item.ttl - (Date.now() - item.ts)) / 1000)}s • {item.status === 'viewed' ? '✓✓' : item.status === 'delivered' ? '✓✓' : item.status === 'wrong_password' ? '✗' : '✓'}</div>
               <button onClick={() => view(item.id)} style={{ marginTop: 6, padding: '4px 8px', background: '#C9A14A', color: '#0E1A24', border: 'none', borderRadius: 6 }}>View (expire)</button>
             </div>
           ))}
