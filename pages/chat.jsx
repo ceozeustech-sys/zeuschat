@@ -10,6 +10,7 @@ export default function Chat() {
   const [peerId, setPeerId] = useState('')
   const [msg, setMsg] = useState('')
   const [list, setList] = useState([])
+  const [useServer, setUseServer] = useState(true)
 
   useEffect(() => {
     const existing = getLS('device_id', '')
@@ -29,13 +30,22 @@ export default function Chat() {
 
   function savePeer(v) { setPeerId(v); setLS('peer_id', v) }
 
-  function send() {
+  async function send() {
     if (!peerId || !msg) return
-    const item = { id: genId(), from: myId, to: peerId, text: msg, ts: Date.now(), ttl: 30000 }
-    const next = [item, ...list]
-    setList(next); setLS('conv', next)
-    setMsg('')
-    setTimeout(() => expire(item.id), item.ttl)
+    if (useServer) {
+      const r = await fetch('/api/send', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ device_id: peerId, data: msg, ttl_ms: 30000 }) })
+      const j = await r.json()
+      const item = { id: j.id || genId(), from: myId, to: peerId, text: msg, ts: Date.now(), ttl: 30000 }
+      const next = [item, ...list]
+      setList(next); setLS('conv', next)
+      setMsg('')
+    } else {
+      const item = { id: genId(), from: myId, to: peerId, text: msg, ts: Date.now(), ttl: 30000 }
+      const next = [item, ...list]
+      setList(next); setLS('conv', next)
+      setMsg('')
+      setTimeout(() => expire(item.id), item.ttl)
+    }
   }
 
   function expire(id) {
@@ -43,6 +53,26 @@ export default function Chat() {
   }
 
   function view(id) { expire(id) }
+
+  useEffect(() => {
+    const t = setInterval(async () => {
+      if (!useServer || !myId) return
+      try {
+        const r = await fetch(`/api/inbox/${myId}`)
+        if (r.status === 204) return
+        const j = await r.json()
+        if (j && j.id) {
+          const b = await fetch(`/api/blob/${j.id}`)
+          if (b.ok) {
+            const p = await b.json()
+            const item = { id: j.id, from: peerId || 'peer', to: myId, text: p.data, ts: Date.now(), ttl: 30000 }
+            setList(prev => { const next = [item, ...prev]; setLS('conv', next); return next })
+          }
+        }
+      } catch {}
+    }, 2000)
+    return () => clearInterval(t)
+  }, [useServer, myId, peerId])
 
   return (
     <main style={{ display: 'flex', minHeight: '100vh', background: '#0E1A24', color: '#C9A14A', alignItems: 'stretch' }}>
@@ -55,7 +85,10 @@ export default function Chat() {
           <input value={msg} onChange={e => setMsg(e.target.value)} placeholder="type a message" style={{ width: '70%', padding: 8 }} />
           <button onClick={send} style={{ marginLeft: 8, padding: '8px 16px', background: '#C9A14A', color: '#0E1A24', border: 'none', borderRadius: 6 }}>Send (demo)</button>
         </div>
-        <p style={{ color: '#fff', marginTop: 8 }}>Messages expire after viewing or 30s.</p>
+        <p style={{ color: '#fff', marginTop: 8 }}>Messages expire after viewing or 30s. Mode: {useServer ? 'Server' : 'Local'}</p>
+        <div style={{ marginTop: 8 }}>
+          <label style={{ color: '#fff' }}><input type="checkbox" checked={useServer} onChange={e => setUseServer(e.target.checked)} /> Use server relay</label>
+        </div>
         <div style={{ marginTop: 16 }}>
           {list.length === 0 ? <p style={{ color: '#fff' }}>No messages</p> : null}
           {list.map(item => (
