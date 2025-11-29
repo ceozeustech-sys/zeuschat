@@ -13,6 +13,7 @@ export default function Register() {
   const [status, setStatus] = useState('')
   const [smsSent, setSmsSent] = useState(false)
   const [smsCode, setSmsCode] = useState('')
+  const [sentCode, setSentCode] = useState('')
   const [verified, setVerified] = useState(false)
 
   function onAvatar(e) {
@@ -26,7 +27,7 @@ export default function Register() {
   async function onSendSms() {
     const r = await fetch('/api/sms/request', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone }) })
     const j = await r.json()
-    if (j.status === 'sent') { setSmsSent(true); setStatus('code_sent'); setSmsCode(j.code) }
+    if (j.status === 'sent') { setSmsSent(true); setStatus('code_sent'); setSentCode(j.code) }
   }
 
   async function onVerify() {
@@ -58,7 +59,7 @@ export default function Register() {
         <input value={pass} onChange={e => setPass(e.target.value)} placeholder="Password" type="password" style={{ width: '100%', padding: 8, marginTop: 8 }} />
         <div style={{ marginTop: 8 }}>
           <button onClick={onSendSms} style={{ padding: '6px 12px', background: '#C9A14A', color: '#0E1A24', border: 'none', borderRadius: 6 }}>Send Code</button>
-          {smsSent ? <span style={{ marginLeft: 8, color: '#fff' }}>Code sent (sim): {smsCode}</span> : null}
+          {smsSent ? <span style={{ marginLeft: 8, color: '#fff' }}>Code sent (sim): {sentCode}</span> : null}
         </div>
         <div style={{ marginTop: 8 }}>
           <input value={smsCode} onChange={e => setSmsCode(e.target.value)} placeholder="Enter verification code" style={{ width: '60%', padding: 8 }} />

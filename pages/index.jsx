@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import HeaderBar from '../components/HeaderBar'
 
 export default function Home() {
   const [swReady, setSwReady] = useState(false)
@@ -56,8 +57,10 @@ export default function Home() {
   }
 
   return (
-    <main style={{ display: 'flex', minHeight: '100vh', alignItems: 'center', justifyContent: 'center', background: '#0E1A24', color: '#C9A14A' }}>
-      <div style={{ textAlign: 'center' }}>
+    <main style={{ minHeight: '100vh', background: '#0E1A24', color: '#C9A14A' }}>
+      <HeaderBar />
+      <div style={{ textAlign: 'center', paddingTop: 24 }}>
+        <img src="/icons/icon-192x192.png" alt="ZeusChat" width="96" height="96" style={{ borderRadius: 16 }} />
         <h1>ZeusChat PWA</h1>
         <p>Messages you see – then they’re gone • by ZEUSTECH</p>
         <div style={{ marginTop: 16, color: '#FFFFFF' }}>
