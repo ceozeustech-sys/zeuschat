@@ -1,5 +1,9 @@
 const inbox = new Map()
 const blobs = new Map()
+const users = new Map() // code -> { name, phone, passwordHashB64, avatarB64 }
+const contacts = new Map() // ownerCode -> [{ code, alias }]
+const acks = new Map() // code -> { blobId, reason }
+const sms = new Map() // phone -> code
 
 function genId() {
   let s = ''
@@ -34,3 +38,14 @@ export function getOnce(id) {
   blobs.delete(id)
   return b.payload
 }
+
+export function registerUser(code, profile) { users.set(code, profile); if (!contacts.has(code)) contacts.set(code, []) }
+export function getUser(code) { return users.get(code) || null }
+export function setProfile(code, patch) { const u = users.get(code) || {}; const nu = { ...u, ...patch }; users.set(code, nu); return nu }
+export function addContact(owner, entry) { const list = contacts.get(owner) || []; const exists = list.find(c => c.code === entry.code); if (!exists) list.push(entry); contacts.set(owner, list); return list }
+export function getContacts(owner) { return contacts.get(owner) || [] }
+export function pushAck(code, blobId, reason) { acks.set(code, { blobId, reason, ts: Date.now() }) }
+export function popAck(code) { const a = acks.get(code); if (!a) return null; acks.delete(code); return a }
+
+export function setSmsCode(phone, code) { sms.set(phone, code) }
+export function verifySms(phone, code) { const c = sms.get(phone); if (!c) return false; const ok = String(c) === String(code); if (ok) sms.delete(phone); return ok }
