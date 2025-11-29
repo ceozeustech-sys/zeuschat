@@ -59,7 +59,7 @@ export default function Home() {
     <main style={{ display: 'flex', minHeight: '100vh', alignItems: 'center', justifyContent: 'center', background: '#0E1A24', color: '#C9A14A' }}>
       <div style={{ textAlign: 'center' }}>
         <h1>ZeusChat PWA</h1>
-        <p>Messages you see – then they’re gone</p>
+        <p>Messages you see – then they’re gone • by ZEUSTECH</p>
         <div style={{ marginTop: 16, color: '#FFFFFF' }}>
           <div>Service Worker Ready: {swReady ? 'Yes' : 'No'}</div>
           <div>Service Worker Controlling Page: {swControlled ? 'Yes' : 'No'}</div>

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import HeaderBar from '../components/HeaderBar'
 
 function genId() { let s = ''; for (let i = 0; i < 16; i++) s += Math.floor(Math.random() * 16).toString(16); return s }
 function b64(s) { if (typeof window === 'undefined') return ''; return btoa(s) }
@@ -47,7 +48,9 @@ export default function Register() {
   }
 
   return (
-    <main style={{ display: 'flex', minHeight: '100vh', background: '#0E1A24', color: '#C9A14A', alignItems: 'center', justifyContent: 'center' }}>
+    <main style={{ minHeight: '100vh', background: '#0E1A24', color: '#C9A14A' }}>
+      <HeaderBar />
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       <div style={{ width: 420 }}>
         <h2>Register</h2>
         <input value={name} onChange={e => setName(e.target.value)} placeholder="Full Name" style={{ width: '100%', padding: 8 }} />
@@ -68,6 +71,7 @@ export default function Register() {
         <button onClick={onRegister} disabled={!verified || !name || !phone || !pass} style={{ marginTop: 12, padding: '8px 16px', background: verified ? '#C9A14A' : '#777', color: '#0E1A24', border: 'none', borderRadius: 6 }}>Create Account</button>
         {code ? <p style={{ color: '#fff' }}>Your code: {code}</p> : null}
         <div style={{ marginTop: 12 }}><a href="/profile" style={{ color: '#C9A14A', textDecoration: 'underline' }}>Go to Profile</a></div>
+      </div>
       </div>
     </main>
   )

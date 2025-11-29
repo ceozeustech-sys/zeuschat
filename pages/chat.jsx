@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import HeaderBar from '../components/HeaderBar'
 
 function getLS(key, def) {
   try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : def } catch { return def }
@@ -40,7 +41,7 @@ export default function Chat() {
     const ttlMs = Math.min(30000, Math.max(10000, parseInt(ttl || '30', 10) * 1000))
     const passHashB64 = btoa(password || '')
     if (useServer) {
-      const payload = { device_id: peerId, data: JSON.stringify({ text: msg, passHashB64 }), ttl_ms: ttlMs }
+      const payload = { device_id: peerId, data: JSON.stringify({ text: msg, passHashB64 }), ttl_ms: ttlMs, from: myId }
       const r = await fetch('/api/send', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
       const j = await r.json()
       const item = { id: j.id || genId(), from: myId, to: peerId, text: msg, ts: Date.now(), ttl: ttlMs }
@@ -74,14 +75,14 @@ export default function Chat() {
           if (b.ok) {
             const p = await b.json()
             let text = ''
-            try { const o = JSON.parse(p.data); text = o.text; const ph = o.passHashB64 || '';
+            try { const o = JSON.parse(p.data); text = o.text; const ph = o.passHashB64 || ''; const sender = p.from || 'peer';
               const entered = prompt('Enter message password to view:') || ''
               if (btoa(entered) !== ph) {
-                await fetch(`/api/ack/${peerId}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ blobId: j.id, reason: 'wrong_password' }) })
+                await fetch(`/api/ack/${sender}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ blobId: j.id, reason: 'wrong_password' }) })
                 return
               }
-            } catch { text = String(p.data || '') }
-            const item = { id: j.id, from: peerId || 'peer', to: myId, text, ts: Date.now(), ttl: 30000 }
+            } catch { text = String(p.data || ''); }
+            const item = { id: j.id, from: (p.from || peerId || 'peer'), to: myId, text, ts: Date.now(), ttl: 30000 }
             setList(prev => { const next = [item, ...prev]; setLS('conv', next); return next })
           }
         }
@@ -91,7 +92,9 @@ export default function Chat() {
   }, [useServer, myId, peerId])
 
   return (
-    <main style={{ display: 'flex', minHeight: '100vh', background: '#0E1A24', color: '#C9A14A', alignItems: 'stretch' }}>
+    <main style={{ minHeight: '100vh', background: '#0E1A24', color: '#C9A14A' }}>
+      <HeaderBar />
+      <div style={{ display: 'flex', alignItems: 'stretch' }}>
       <div style={{ flex: 1, padding: 16 }}>
         <h2>ZeusChat (Demo)</h2>
         <p style={{ color: '#fff' }}>Your ID: {myId}</p>
@@ -125,6 +128,7 @@ export default function Chat() {
         <div style={{ marginTop: 18 }}>
           <a href="/" style={{ color: '#C9A14A', textDecoration: 'underline' }}>Home</a>
         </div>
+      </div>
       </div>
     </main>
   )
