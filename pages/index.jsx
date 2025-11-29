@@ -6,6 +6,8 @@ export default function Home() {
   const [canInstall, setCanInstall] = useState(false)
   const [promptEvt, setPromptEvt] = useState(null)
   const [installed, setInstalled] = useState(false)
+  const [installs, setInstalls] = useState(0)
+  const [offlineHits, setOfflineHits] = useState(0)
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -21,9 +23,22 @@ export default function Home() {
       setPromptEvt(e)
       setCanInstall(true)
     }
-    function onInstalled() { setInstalled(true) }
+    function onInstalled() {
+      setInstalled(true)
+      try {
+        const n = parseInt(localStorage.getItem('install_count') || '0', 10) + 1
+        localStorage.setItem('install_count', String(n))
+        setInstalls(n)
+      } catch {}
+    }
     window.addEventListener('beforeinstallprompt', onBIP)
     window.addEventListener('appinstalled', onInstalled)
+    try {
+      const n = parseInt(localStorage.getItem('install_count') || '0', 10)
+      setInstalls(n)
+      const o = parseInt(localStorage.getItem('offline_hits') || '0', 10)
+      setOfflineHits(o)
+    } catch {}
     return () => {
       window.removeEventListener('beforeinstallprompt', onBIP)
       window.removeEventListener('appinstalled', onInstalled)
@@ -36,6 +51,10 @@ export default function Home() {
     setCanInstall(false)
   }
 
+  function retry() {
+    location.reload()
+  }
+
   return (
     <main style={{ display: 'flex', minHeight: '100vh', alignItems: 'center', justifyContent: 'center', background: '#0E1A24', color: '#C9A14A' }}>
       <div style={{ textAlign: 'center' }}>
@@ -46,10 +65,20 @@ export default function Home() {
           <div>Service Worker Controlling Page: {swControlled ? 'Yes' : 'No'}</div>
           <div>Install Available: {canInstall ? 'Yes' : 'No'}</div>
           <div>Installed: {installed ? 'Yes' : 'No'}</div>
+          <div>Installs: {installs}</div>
+          <div>Offline Views: {offlineHits}</div>
         </div>
         {canInstall ? (
           <button onClick={doInstall} style={{ marginTop: 16, padding: '8px 16px', background: '#C9A14A', color: '#0E1A24', border: 'none', borderRadius: 6 }}>Install</button>
         ) : null}
+        <div style={{ marginTop: 12 }}>
+          <button onClick={retry} style={{ padding: '6px 12px', background: '#C9A14A', color: '#0E1A24', border: 'none', borderRadius: 6 }}>Retry</button>
+        </div>
+        <div style={{ marginTop: 18 }}>
+          <a href="/health" style={{ color: '#C9A14A', textDecoration: 'underline', marginRight: 12 }}>Status</a>
+          <a href="/about" style={{ color: '#C9A14A', textDecoration: 'underline', marginRight: 12 }}>About</a>
+          <a href="mailto:hello@zeustechafrica.com" style={{ color: '#C9A14A', textDecoration: 'underline' }}>Contact</a>
+        </div>
       </div>
     </main>
   )
