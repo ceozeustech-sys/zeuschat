@@ -9,6 +9,7 @@ export default function Home() {
   const [installed, setInstalled] = useState(false)
   const [installs, setInstalls] = useState(0)
   const [offlineHits, setOfflineHits] = useState(0)
+  const [relayOk, setRelayOk] = useState(false)
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -46,6 +47,8 @@ export default function Home() {
     }
   }, [])
 
+  useEffect(() => { (async () => { try { const r = await fetch('/api/relay/test'); setRelayOk(r.ok) } catch { setRelayOk(false) } })() }, [])
+
   async function doInstall() {
     if (!promptEvt) return
     await promptEvt.prompt()
@@ -64,6 +67,7 @@ export default function Home() {
         <h1>ZeusChat PWA</h1>
         <p>Messages you see – then they’re gone • by ZEUSTECH</p>
         <div style={{ marginTop: 16, color: '#FFFFFF' }}>
+          <div>Relay: {relayOk ? 'OK' : 'Offline'}</div>
           <div>Service Worker Ready: {swReady ? 'Yes' : 'No'}</div>
           <div>Service Worker Controlling Page: {swControlled ? 'Yes' : 'No'}</div>
           <div>Install Available: {canInstall ? 'Yes' : 'No'}</div>
@@ -78,13 +82,12 @@ export default function Home() {
           <button onClick={retry} style={{ padding: '6px 12px', background: '#C9A14A', color: '#0E1A24', border: 'none', borderRadius: 6 }}>Retry</button>
         </div>
         <div style={{ marginTop: 18 }}>
-          <a href="/health" style={{ color: '#C9A14A', textDecoration: 'underline', marginRight: 12 }}>Status</a>
-          <a href="/about" style={{ color: '#C9A14A', textDecoration: 'underline', marginRight: 12 }}>About</a>
+          <a href="/register" style={{ color: '#C9A14A', textDecoration: 'underline', marginRight: 12 }}>Get Started</a>
           <a href="/chats" style={{ color: '#C9A14A', textDecoration: 'underline', marginRight: 12 }}>Chats</a>
-          <a href="/chat" style={{ color: '#C9A14A', textDecoration: 'underline', marginRight: 12 }}>Demo Chat</a>
-          <a href="/register" style={{ color: '#C9A14A', textDecoration: 'underline', marginRight: 12 }}>Register</a>
-          <a href="/contacts" style={{ color: '#C9A14A', textDecoration: 'underline', marginRight: 12 }}>Contacts</a>
-          <a href="mailto:hello@zeustechafrica.com" style={{ color: '#C9A14A', textDecoration: 'underline' }}>Contact</a>
+          <a href="/about" style={{ color: '#C9A14A', textDecoration: 'underline', marginRight: 12 }}>About</a>
+          <a href="/privacy" style={{ color: '#C9A14A', textDecoration: 'underline', marginRight: 12 }}>Privacy</a>
+          <a href="/terms" style={{ color: '#C9A14A', textDecoration: 'underline', marginRight: 12 }}>Terms</a>
+          <a href="/acceptable" style={{ color: '#C9A14A', textDecoration: 'underline' }}>Policy</a>
         </div>
       </div>
     </main>

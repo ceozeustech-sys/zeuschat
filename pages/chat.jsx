@@ -163,6 +163,20 @@ export default function Chat() {
     } catch {}
   }
 
+  async function sendReply(targetCode, originalId) {
+    const body = replies[originalId] || ''
+    if (!body) return
+    const ttlMs = Math.min(30000, Math.max(10000, parseInt(ttl || '30', 10) * 1000))
+    if (useServer) {
+      const payload = { device_id: targetCode, data: JSON.stringify({ text: body }), ttl_ms: ttlMs, from: myId }
+      const r = await fetch('/api/send', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+      const j = await r.json()
+      const item = { id: j.id || genId(), from: myId, to: targetCode, text: body, ts: Date.now(), ttl: ttlMs, status: 'sent' }
+      setList(prev => { const next = [item, ...prev]; setLS('conv', next); return next })
+      setReplies(prev => ({ ...prev, [originalId]: '' }))
+    }
+  }
+
   return (
     <main style={{ minHeight: '100vh', background: '#0E1A24', color: '#C9A14A' }}>
       <HeaderBar />
@@ -229,27 +243,6 @@ export default function Chat() {
             </div>
           ))}
         </div>
-        <div style={{ marginTop: 18 }}>
-          <a href="/" style={{ color: '#C9A14A', textDecoration: 'underline' }}>Home</a>
-        </div>
-      </div>
-      </div>
-    </main>
-  )
-}
-  async function sendReply(targetCode, originalId) {
-    const body = replies[originalId] || ''
-    if (!body) return
-    const ttlMs = Math.min(30000, Math.max(10000, parseInt(ttl || '30', 10) * 1000))
-    if (useServer) {
-      const payload = { device_id: targetCode, data: JSON.stringify({ text: body }), ttl_ms: ttlMs, from: myId }
-      const r = await fetch('/api/send', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
-      const j = await r.json()
-      const item = { id: j.id || genId(), from: myId, to: targetCode, text: body, ts: Date.now(), ttl: ttlMs, status: 'sent' }
-      setList(prev => { const next = [item, ...prev]; setLS('conv', next); return next })
-      setReplies(prev => ({ ...prev, [originalId]: '' }))
-    }
-  }
         {showReq.visible ? (
           <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <div style={{ background: '#102030', color: '#fff', padding: 16, borderRadius: 8, width: 360 }}>
@@ -262,3 +255,11 @@ export default function Chat() {
             </div>
           </div>
         ) : null}
+        <div style={{ marginTop: 18 }}>
+          <a href="/" style={{ color: '#C9A14A', textDecoration: 'underline' }}>Home</a>
+        </div>
+      </div>
+      </div>
+    </main>
+  )
+}

@@ -6,6 +6,7 @@ export default function Contacts() {
   const [list, setList] = useState([])
   const [peer, setPeer] = useState('')
   const [alias, setAlias] = useState('')
+  const [relayOk, setRelayOk] = useState(false)
 
   useEffect(() => {
     const c = localStorage.getItem('device_id') || ''
@@ -22,6 +23,7 @@ export default function Contacts() {
         setList(withProfiles)
       }
     })()
+    ;(async () => { try { const t = await fetch('/api/relay/test'); setRelayOk(t.ok) } catch { setRelayOk(false) } })()
   }, [])
 
   async function add() {
@@ -37,6 +39,7 @@ export default function Contacts() {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       <div style={{ width: 480 }}>
         <h2>Contacts</h2>
+        <div style={{ color: '#fff', marginBottom: 8 }}>Relay: {relayOk ? 'OK' : 'Offline'}</div>
         <div>
           <input value={peer} onChange={e => setPeer(e.target.value)} placeholder="Friend's code" style={{ width: '60%', padding: 8 }} />
           <input value={alias} onChange={e => setAlias(e.target.value)} placeholder="Alias (optional)" style={{ width: '30%', padding: 8, marginLeft: 8 }} />
