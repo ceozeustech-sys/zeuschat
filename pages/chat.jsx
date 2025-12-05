@@ -24,6 +24,8 @@ export default function Chat() {
   const [recording, setRecording] = useState(false)
   const [recChunks, setRecChunks] = useState([])
   const [recMime, setRecMime] = useState('')
+  const [peerAllowed, setPeerAllowed] = useState(true)
+  const [warn, setWarn] = useState('')
 
   useEffect(() => {
     const existing = getLS('device_id', '')
@@ -48,10 +50,30 @@ export default function Chat() {
     let s = ''; for (let i = 0; i < 16; i++) s += Math.floor(Math.random() * 16).toString(16); return s
   }
 
-  function savePeer(v) { setPeerId(v); setLS('peer_id', v) }
+  function savePeer(v) { setPeerId(v); setLS('peer_id', v); setWarn(''); setPeerAllowed(true) }
+
+  async function validatePeer() {
+    if (!peerId || !myId) return false
+    try {
+      const r = await fetch(`/api/contacts/${myId}`)
+      if (!r.ok) { setWarn('contacts_unavailable'); setPeerAllowed(false); return false }
+      const cl = await r.json()
+      const exists = !!cl.find(x => x.code === peerId)
+      if (!exists) { setWarn('not_in_contacts'); setPeerAllowed(false); return false }
+      const pr = await fetch(`/api/profile/${peerId}`)
+      if (!pr.ok) { setWarn('peer_not_found'); setPeerAllowed(false); return false }
+      const pj = await pr.json()
+      const active = pj.status !== 'offline'
+      setPeerAllowed(active)
+      if (!active) setWarn('peer_offline')
+      return active
+    } catch { setWarn('network_error'); setPeerAllowed(false); return false }
+  }
 
   async function send() {
     if (!peerId || !msg) return
+    const ok = await validatePeer()
+    if (!ok) return
     const ttlMs = Math.min(30000, Math.max(10000, parseInt(ttl || '30', 10) * 1000))
     if (useServer) {
       let dataObj = { kind: 'text', text: msg }
@@ -182,7 +204,7 @@ export default function Chat() {
       <HeaderBar />
       <div style={{ display: 'flex', alignItems: 'stretch' }}>
       <div style={{ flex: 1, padding: 16 }}>
-        <h2>ZeusChat (Demo)</h2>
+        <h2>ZeusChat</h2>
         <p style={{ color: '#fff' }}>Your ID: {myId} • Relay: {relayOk ? 'OK' : 'Offline'}</p>
         <label style={{ color: '#fff' }}>Peer ID</label>
         <input value={peerId} onChange={e => savePeer(e.target.value)} placeholder="friend's device id" style={{ width: '100%', padding: 8 }} />
@@ -194,7 +216,8 @@ export default function Chat() {
             <option value="20">20s</option>
             <option value="30">30s</option>
           </select>
-          <button onClick={send} style={{ marginLeft: 8, padding: '8px 16px', background: '#C9A14A', color: '#0E1A24', border: 'none', borderRadius: 6 }}>Send (demo)</button>
+          <button onClick={send} disabled={!peerAllowed} style={{ marginLeft: 8, padding: '8px 16px', background: peerAllowed ? '#C9A14A' : '#777', color: '#0E1A24', border: 'none', borderRadius: 6 }}>Send</button>
+          {warn ? <span style={{ marginLeft: 8, color: '#ff6' }}>{warn}</span> : null}
         </div>
         <div style={{ marginTop: 8 }}>
           <input type="file" accept="image/*,video/*" onChange={onAttachFile} />

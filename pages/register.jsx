@@ -71,6 +71,7 @@ export default function Register() {
     const j = await r.json()
     if (j.status === 'ok') {
       localStorage.setItem('device_id', c)
+      localStorage.setItem('user_id', c)
       localStorage.setItem('profile', JSON.stringify({ name, phone, avatarB64 }))
       setStatus('registered')
     } else setStatus('error')
