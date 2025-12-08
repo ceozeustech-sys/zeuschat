@@ -15,6 +15,8 @@ export default function Chat() {
   const [useServer, setUseServer] = useState(true)
   const [password, setPassword] = useState('')
   const [ttl, setTtl] = useState('30')
+  const [ttlChoice, setTtlChoice] = useState('override')
+  const [defaultTtlMs, setDefaultTtlMs] = useState(30000)
   const [myPassHash, setMyPassHash] = useState('')
   const [replies, setReplies] = useState({})
   const [relayOk, setRelayOk] = useState(false)
@@ -34,20 +36,26 @@ export default function Chat() {
   async function deriveKey(a, b) { const pair = [a, b].sort().join(':'); const enc = new TextEncoder().encode('MLS:' + pair); const d = await crypto.subtle.digest('SHA-256', enc); return await crypto.subtle.importKey('raw', d, { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']) }
 
   useEffect(() => {
-    const existing = getLS('device_id', '')
+    const existing = getLS('zeuscode', '')
     if (existing) setMyId(existing)
-    else {
-      const id = genId(); setMyId(id); setLS('device_id', id)
-    }
-    const peer = getLS('peer_id', '')
+    const peer = getLS('peer_zeuscode', '')
     setPeerId(peer || '')
     const conv = getLS('conv', [])
     setList(conv)
     try {
-      const qp = new URLSearchParams(window.location.search); const p = qp.get('peer'); if (p) { setPeerId(p); setLS('peer_id', p) }
+      const qp = new URLSearchParams(window.location.search); const p = qp.get('peer'); if (p) { setPeerId(p); setLS('peer_zeuscode', p) }
     } catch {}
     ;(async () => {
-      try { const r = await fetch(`/api/profile/${existing || getLS('device_id','')}`); if (r.ok) { const j = await r.json(); setMyPassHash(j.passwordHashB64 || '') } } catch {}
+      try {
+        const r = await fetch(`/api/profile/${existing || getLS('zeuscode','')}`)
+        if (r.ok) {
+          const j = await r.json()
+          setMyPassHash(j.passwordHashB64 || '')
+          const dis = j.disappearing || '24h'
+          const map = { '24h': 24*60*60*1000, '7d': 7*24*60*60*1000, 'off': 30000 }
+          setDefaultTtlMs(map[dis] || 30000)
+        }
+      } catch {}
     })()
     ;(async () => { try { const t = await fetch('/api/relay/test'); setRelayOk(t.ok) } catch { setRelayOk(false) } })()
   }, [])
@@ -69,7 +77,7 @@ export default function Chat() {
     let s = ''; for (let i = 0; i < 16; i++) s += Math.floor(Math.random() * 16).toString(16); return s
   }
 
-  function savePeer(v) { setPeerId(v); setLS('peer_id', v); setWarn(''); setPeerAllowed(true) }
+  function savePeer(v) { setPeerId(v); setLS('peer_zeuscode', v); setWarn(''); setPeerAllowed(true) }
 
   async function validatePeer() {
     if (!peerId || !myId) return false
@@ -89,17 +97,25 @@ export default function Chat() {
     } catch { setWarn('network_error'); setPeerAllowed(false); return false }
   }
 
+  function pickTtlMs() {
+    if (ttlChoice === 'override') {
+      return Math.max(5000, Math.min(86400000, parseInt(ttl || '30', 10) * 1000))
+    }
+    const map = { '5s': 5000, '30s': 30000, '1m': 60000, '5m': 300000, '1h': 3600000, '24h': 86400000 }
+    return map[ttlChoice] || defaultTtlMs
+  }
+
   async function send() {
     if (!peerId || !msg) return
     const ok = await validatePeer()
     if (!ok) return
-    const ttlMs = Math.max(5000, Math.min(86400000, parseInt(ttl || '30', 10) * 1000))
+    const ttlMs = pickTtlMs()
     if (useServer) {
       let dataObj = { kind: 'text', text: msg, ttl: ttlMs }
       if (attachB64 && attachKind) dataObj = { kind: attachKind, b64: attachB64, mime: attachMime, ttl: ttlMs }
       let encPayload = JSON.stringify(dataObj)
       try { const key = await deriveKey(myId, peerId); const iv = crypto.getRandomValues(new Uint8Array(12)); const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, new TextEncoder().encode(encPayload)); encPayload = JSON.stringify({ enc: toB64(ct), iv: toB64(iv.buffer) }) } catch {}
-      const payload = { device_id: peerId, data: encPayload, ttl_ms: ttlMs, from: myId }
+      const payload = { to_zeuscode: peerId, data: encPayload, ttl_ms: ttlMs, from: myId }
       const r = await fetch('/api/send', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
       const j = await r.json()
       const item = { id: j.id || genId(), from: myId, to: peerId, text: msg, kind: dataObj.kind, b64: dataObj.b64 || '', mime: dataObj.mime || '', ts: Date.now(), ttl: ttlMs, status: 'sent' }
@@ -211,7 +227,7 @@ export default function Chat() {
     if (!body) return
     const ttlMs = Math.max(5000, Math.min(86400000, parseInt(ttl || '30', 10) * 1000))
     if (useServer) {
-      const payload = { device_id: targetCode, data: JSON.stringify({ text: body, ttl: ttlMs }), ttl_ms: ttlMs, from: myId }
+      const payload = { to_zeuscode: targetCode, data: JSON.stringify({ text: body, ttl: ttlMs }), ttl_ms: ttlMs, from: myId }
       const r = await fetch('/api/send', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
       const j = await r.json()
       const item = { id: j.id || genId(), from: myId, to: targetCode, text: body, ts: Date.now(), ttl: ttlMs, status: 'sent' }
@@ -249,8 +265,23 @@ export default function Chat() {
       <div style={{ display: 'flex', alignItems: 'stretch' }}>
       <div style={{ flex: 1, padding: 16 }}>
         <h2>ZeusChat</h2>
-        <p style={{ color: '#fff' }}>Your ID: {myId} • Relay: {relayOk ? 'OK' : 'Offline'}</p>
+        <p style={{ color: '#fff' }}>Your ZeusCode: {myId} • Relay: {relayOk ? 'OK' : 'Offline'}</p>
         <div style={{ color: '#aaa', marginTop: 4 }}>{peerId ? (`Chat with ${peerId}`) : 'Select a contact to start chatting'}</div>
+        <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <label style={{ color: '#fff' }}>TTL</label>
+          <select value={ttlChoice} onChange={e => setTtlChoice(e.target.value)} style={{ padding: 6, background: '#0E1A24', color: '#C9A14A', border: '1px solid #1b2a40', borderRadius: 6 }}>
+            <option value="override">Override…</option>
+            <option value="5s">5 seconds</option>
+            <option value="30s">30 seconds</option>
+            <option value="1m">1 minute</option>
+            <option value="5m">5 minutes</option>
+            <option value="1h">1 hour</option>
+            <option value="24h">24 hours</option>
+          </select>
+          {ttlChoice === 'override' ? (
+            <input value={ttl} onChange={e => setTtl(e.target.value)} placeholder="seconds" style={{ width: 120, padding: 6, background: '#0E1A24', color: '#C9A14A', border: '1px solid #1b2a40', borderRadius: 6 }} />
+          ) : null}
+        </div>
         <PaymentModal open={payOpen} onClose={() => setPayOpen(false)} onSend={async payload => { const ttlMs = Math.max(5000, Math.min(86400000, parseInt(ttl || '30', 10) * 1000)); const p = { device_id: peerId, data: JSON.stringify({ ...payload, ttl: ttlMs }), ttl_ms: ttlMs, from: myId }; try { const r = await fetch('/api/send', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(p) }); const j = await r.json(); const item = { id: j.id || genId(), from: myId, to: peerId, text: `${payload.network} ${payload.amount}`, kind: 'payment', b64: '', mime: '', ts: Date.now(), ttl: ttlMs, status: 'sent' }; const next = [item, ...list]; setList(next); setLS('conv', next) } catch {} setPayOpen(false) }} />
         {view.open ? (
           <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -268,11 +299,11 @@ export default function Chat() {
           <div style={{ marginTop: 8 }}>
             <div style={{ color: '#fff' }}>Attachment ready: {attachKind}</div>
             {attachKind === 'image' ? (
-              <img src={`data:${attachMime};base64,${attachB64}`} alt="preview" style={{ maxWidth: '60%', borderRadius: 8 }} onContextMenu={e => e.preventDefault()} />
+              <img src={`data:${attachMime};base64,${attachB64}`} alt="preview" style={{ maxWidth: '60%', borderRadius: 8, userSelect: 'none' }} onContextMenu={e => e.preventDefault()} draggable={false} onDragStart={e => e.preventDefault()} />
             ) : attachKind === 'video' ? (
-              <video src={`data:${attachMime};base64,${attachB64}`} style={{ maxWidth: '60%', borderRadius: 8 }} onContextMenu={e => e.preventDefault()} />
+              <video src={`data:${attachMime};base64,${attachB64}`} style={{ maxWidth: '60%', borderRadius: 8 }} onContextMenu={e => e.preventDefault()} controls controlsList="nodownload" />
             ) : attachKind === 'audio' ? (
-              <audio src={`data:${attachMime};base64,${attachB64}`} />
+              <audio src={`data:${attachMime};base64,${attachB64}`} controls controlsList="nodownload" />
             ) : null}
           </div>
         ) : null}
@@ -287,11 +318,11 @@ export default function Chat() {
               <div style={{ maxWidth: '70%', background: item.from === myId ? '#1b2a40' : '#102030', padding: 12, borderRadius: 12 }}>
                 <div style={{ color: '#fff' }}><b>{item.from === myId ? 'You' : 'Peer'}</b></div>
                 {item.kind === 'image' ? (
-                  <img src={`data:${item.mime || 'image/png'};base64,${item.b64}`} alt="image" style={{ maxWidth: '100%', borderRadius: 8 }} onContextMenu={e => e.preventDefault()} />
+                  <img src={`data:${item.mime || 'image/png'};base64,${item.b64}`} alt="image" style={{ maxWidth: '100%', borderRadius: 8, userSelect: 'none' }} onContextMenu={e => e.preventDefault()} draggable={false} onDragStart={e => e.preventDefault()} />
                 ) : item.kind === 'video' ? (
-                  <video src={`data:${item.mime || 'video/mp4'};base64,${item.b64}`} style={{ width: '100%', borderRadius: 8 }} onContextMenu={e => e.preventDefault()} />
+                  <video src={`data:${item.mime || 'video/mp4'};base64,${item.b64}`} style={{ width: '100%', borderRadius: 8 }} onContextMenu={e => e.preventDefault()} controls controlsList="nodownload" />
                 ) : item.kind === 'audio' ? (
-                  <audio src={`data:${item.mime || 'audio/webm'};base64,${item.b64}`} />
+                  <audio src={`data:${item.mime || 'audio/webm'};base64,${item.b64}`} controls controlsList="nodownload" />
                 ) : (
                   <div style={{ color: '#fff' }}>{item.text}</div>
                 )}
@@ -325,14 +356,6 @@ export default function Chat() {
           <label htmlFor="attach-file" style={{ padding: '6px 10px', background: '#1b2a40', color: '#C9A14A', borderRadius: 6, marginRight: 8 }}>+</label>
           <button onClick={startRecord} disabled={recording} style={{ padding: '6px 10px', background: recording ? '#777' : '#1b2a40', color: '#C9A14A', border: 'none', borderRadius: 6, marginRight: 8 }}>Mic</button>
           <input value={msg} onChange={e => setMsg(e.target.value)} placeholder="Type a message" style={{ flex: 1, padding: 8, background: '#0E1A24', color: '#C9A14A', border: '1px solid #102030', borderRadius: 20 }} />
-          <select value={ttl} onChange={e => setTtl(e.target.value)} style={{ marginLeft: 8, padding: 8, background: '#0E1A24', color: '#C9A14A', border: '1px solid #102030', borderRadius: 12 }}>
-            <option value="5">5s</option>
-            <option value="15">15s</option>
-            <option value="30">30s</option>
-            <option value="60">1m</option>
-            <option value="300">5m</option>
-            <option value="86400">24h</option>
-          </select>
           <button onClick={send} disabled={!peerAllowed} style={{ marginLeft: 8, padding: '8px 16px', background: peerAllowed ? '#C9A14A' : '#777', color: '#0E1A24', border: 'none', borderRadius: 20 }}>Send</button>
           <button onClick={() => setPayOpen(true)} disabled={!peerAllowed} style={{ marginLeft: 8, padding: '8px 12px', background: peerAllowed ? '#C9A14A' : '#777', color: '#0E1A24', border: 'none', borderRadius: 12 }}>Pay</button>
         </div>

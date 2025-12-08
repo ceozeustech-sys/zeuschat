@@ -14,7 +14,12 @@ export default function Register() {
   const [status, setStatus] = useState('')
 
   useEffect(() => {
-    try { const z = localStorage.getItem('zeuscode') || ''; if (z) setZeuscode(z) } catch {}
+    try {
+      const z0 = localStorage.getItem('zeuscode') || ''
+      const z = z0 || genZeusCode()
+      setZeuscode(z)
+      if (!z0) localStorage.setItem('zeuscode', z)
+    } catch {}
   }, [])
 
   function onAvatar(e) {
@@ -27,16 +32,15 @@ export default function Register() {
 
   async function onRegister() {
     const z = zeuscode || genZeusCode(); setZeuscode(z)
-    const c = z.replace(/-/g, '') + '-' + Math.floor(Math.random() * 1e6).toString(16)
     const ph = await hashPin(pin)
     let contact = { method: 'phone', phone: '' }
     try { contact = JSON.parse(localStorage.getItem('verified_contact') || '{}') } catch {}
     const phone = contact.method === 'phone' ? (contact.phone || '') : (`email:${contact.email || ''}`)
-    const payload = { code: c, name, phone, passwordHashB64: ph, avatarB64 }
+    const payload = { code: z, name, phone, passwordHashB64: ph, avatarB64 }
     const r = await fetch('/api/register', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
     const j = await r.json().catch(() => ({}))
     if (j.status === 'ok') {
-      try { localStorage.setItem('device_id', c); localStorage.setItem('user_id', c); localStorage.setItem('zeuscode', z); localStorage.setItem('pin_hash', ph); localStorage.setItem('profile', JSON.stringify({ name, phone, avatarB64 })) } catch {}
+      try { localStorage.setItem('user_id', z); localStorage.setItem('zeuscode', z); localStorage.setItem('pin_hash', ph); localStorage.setItem('profile', JSON.stringify({ name, phone, avatarB64 })) } catch {}
       setStatus('registered')
       try { window.location.replace('/profile') } catch { window.location.href = '/profile' }
     } else setStatus('error')
@@ -52,14 +56,11 @@ export default function Register() {
         <div style={{ marginTop: 8 }}>
           <input value={pin} onChange={e => setPin(e.target.value)} placeholder="Choose a 4-digit PIN" type="password" style={{ width: '100%', padding: 8 }} />
         </div>
-        <div style={{ marginTop: 8, color: '#fff' }}>Your ZeusCode: <b>{zeuscode || 'Tap Generate'}</b></div>
-        <div style={{ marginTop: 8 }}>
-          <button onClick={() => setZeuscode(genZeusCode())} style={{ padding: '6px 12px', background: '#C9A14A', color: '#0E1A24', border: 'none', borderRadius: 6 }}>Generate</button>
-        </div>
+        <div style={{ marginTop: 8, color: '#fff' }}>Your ZeusCode: <b>{zeuscode}</b></div>
         <div style={{ marginTop: 8 }}>
           <input type="file" accept="image/*" onChange={onAvatar} />
         </div>
-        <button onClick={onRegister} disabled={!name || !pin || !zeuscode} style={{ marginTop: 12, padding: '8px 16px', background: (!name || !pin || !zeuscode) ? '#777' : '#C9A14A', color: '#0E1A24', border: 'none', borderRadius: 6 }}>Create Account</button>
+        <button onClick={onRegister} disabled={!name || !pin} style={{ marginTop: 12, padding: '8px 16px', background: (!name || !pin) ? '#777' : '#C9A14A', color: '#0E1A24', border: 'none', borderRadius: 6 }}>Create Account</button>
         {status === 'error' ? <p style={{ color: '#ff6' }}>Failed to create account</p> : null}
         {zeuscode ? <p style={{ color: '#fff' }}>Your ZeusCode: {zeuscode}</p> : null}
       </div>

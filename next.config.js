@@ -9,6 +9,16 @@ const withPWA = require('next-pwa')({
 
 module.exports = withPWA({
   reactStrictMode: true,
+  async redirects() {
+    return [
+      {
+        source: '/',
+        has: [{ type: 'host', value: 'zeuschat.zeustechafrica.com' }],
+        destination: 'https://zeuschat.zeustechafrica.com/',
+        permanent: true,
+      }
+    ]
+  },
   async headers() {
     return [
       {
